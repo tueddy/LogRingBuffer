@@ -1,78 +1,80 @@
 /***************************************************
-    Copyright (C) 2020  Martin Koerner
+	Copyright (C) 2020  Martin Koerner
 
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
 
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+	You should have received a copy of the GNU General Public License
+	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-    HISTORY: Please refer Github History
+	HISTORY: Please refer Github History
 
 ****************************************************/
 #include "LogRingBuffer.h"
 
-LogRingBuffer::LogRingBuffer()
-{
-  bufferIndex = 0u;
-  isFull = false;
+LogRingBuffer::LogRingBuffer() {
+	// Allocate buffer in PSRAM if available
+	buffer = static_cast<char *>(psramFound() ? ps_malloc(LOG_BUFFER_SIZE) : malloc(LOG_BUFFER_SIZE));
+	bufferIndex = 0u;
+	isFull = false;
 }
 
-LogRingBuffer::~LogRingBuffer()
-{
+LogRingBuffer::~LogRingBuffer() {
+	if (buffer) {
+		free(buffer);
+		buffer = nullptr;
+	}
 }
 
-size_t LogRingBuffer::write(uint8_t character)
-{
-  buffer[bufferIndex++] = character;
+size_t LogRingBuffer::write(uint8_t character) {
+	if (!buffer) {
+		return 0u;
+	}
 
-  // Check for overflow
-  if (bufferIndex >= LOG_BUFFER_SIZE)
-  {
-    bufferIndex = 0u;
-    isFull = true;
-  }
+	buffer[bufferIndex++] = character;
 
-  return 1u;
+	// Check for overflow
+	if (bufferIndex >= LOG_BUFFER_SIZE) {
+		bufferIndex = 0u;
+		isFull = true;
+	}
+
+	return 1u;
 }
 
-String LogRingBuffer::get()
-{
-  String logString;
+String LogRingBuffer::get() {
+	String logString;
 
-  if ((false == isFull))
-  {
-    for (size_t i = 0u; i < bufferIndex; i++)
-    {
-      logString += buffer[i];
-    }
-  }
-  else
-  {
-    for (size_t i = 0; i < LOG_BUFFER_SIZE; i++)
-    {
-      size_t index = bufferIndex + i;
+	if (!buffer) {
+		return logString;
+	}
 
-      if (index >= LOG_BUFFER_SIZE)
-      {
-        index -= LOG_BUFFER_SIZE;
-      }
+	if ((false == isFull)) {
+		for (size_t i = 0u; i < bufferIndex; i++) {
+			logString += buffer[i];
+		}
+	} else {
+		for (size_t i = 0; i < LOG_BUFFER_SIZE; i++) {
+			size_t index = bufferIndex + i;
 
-      logString += buffer[index];
-    }
-  }
+			if (index >= LOG_BUFFER_SIZE) {
+				index -= LOG_BUFFER_SIZE;
+			}
 
-  return logString;
+			logString += buffer[index];
+		}
+	}
+
+	return logString;
 }
 
-void *LogRingBuffer::operator new(size_t size)
-{
-  return psramFound() ? ps_malloc(size) : malloc(size);
+void *LogRingBuffer::operator new(size_t size) {
+	return psramFound() ? ps_malloc(size) : malloc(size);
 }
